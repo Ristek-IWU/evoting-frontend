@@ -31,7 +31,21 @@ function Voting() {
         if (!status.data.isOpen) return navigate("/dashboard")
 
         const res = await API.get("/api/candidates")
-        setCandidates(res.data || [])
+        const candidateList = res.data || []
+        setCandidates(candidateList)
+
+        try {
+          const myVote = await API.get("/api/votes/me")
+          if (myVote.data?.candidateId) {
+            const votedCandidate = candidateList.find(
+              (c) => c.id === myVote.data.candidateId
+            )
+            if (votedCandidate) {
+              setSelected(votedCandidate)
+              setVoteSuccess(true)
+            }
+          }
+        } catch {}
       }
 
       fetchAll().finally(() => setLoading(false))
@@ -43,14 +57,13 @@ function Voting() {
 
   // ================= SUBMIT =================
   const submitVote = async () => {
-    if (!selected || submitting) return
+    if (!selected || submitting || voteSuccess) return
     setSubmitting(true)
 
     try {
       await API.post("/api/votes", { candidateId: selected.id })
       setVoteSuccess(true)
-
-      setTimeout(() => navigate("/dashboard"), 2200)
+      setTimeout(() => navigate("/dashboard"), 2500)
     } catch (err) {
       alert(err?.response?.data?.message || "❌ Gagal voting")
     } finally {
@@ -61,11 +74,7 @@ function Voting() {
   // ================= TEXT FORMAT =================
   const renderParagraph = (text) => {
     if (!text) {
-      return (
-        <p className="text-sm text-slate-400 italic">
-          Tidak tersedia
-        </p>
-      )
+      return <p className="text-sm text-slate-400 italic">Tidak tersedia</p>
     }
 
     return (
@@ -76,136 +85,157 @@ function Voting() {
   }
 
   return (
-    <div className="relative min-h-screen overflow-hidden text-slate-800">
+    <div className="relative min-h-screen overflow-x-hidden text-slate-800 flex flex-col md:flex-row">
       <Navbar />
 
-      {/* ===== BACKGROUND ===== */}
-      <motion.div
-        className="absolute inset-0 -z-10"
-        animate={{ backgroundPosition: ["0% 50%", "100% 50%"] }}
-        transition={{ duration: 25, repeat: Infinity, repeatType: "reverse" }}
-        style={{
-          background:
-            "linear-gradient(120deg, #f8fafc, #e0f2fe, #e0e7ff, #f8fafc)",
-          backgroundSize: "300% 300%",
-        }}
-      />
-
-      {/* ===== CONTAINER ===== */}
-      <div className="pt-20 pb-28 max-w-7xl mx-auto px-4 sm:px-6 md:ml-[280px] md:pl-10 md:pr-16">
-        {/* ===== HEADER ===== */}
+      {/* Main Content Area: Sejajar dengan Navbar */}
+      <main className="flex-1 relative z-10 w-full">
+        
+        {/* ===== BACKGROUND ===== */}
         <motion.div
-          initial={{ opacity: 0, y: -25 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-14 text-center"
-        >
-          <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold bg-gradient-to-r from-slate-900 via-indigo-800 to-cyan-600 bg-clip-text text-transparent">
-            Pemilihan Kandidat
-          </h1>
-          <p className="mt-3 text-sm sm:text-base md:text-lg text-slate-600">
-            Kenali visi, misi, dan perjalanan karir kandidat
-          </p>
-        </motion.div>
+          className="absolute inset-0 -z-10"
+          animate={{ backgroundPosition: ["0% 50%", "100% 50%"] }}
+          transition={{ duration: 25, repeat: Infinity, repeatType: "reverse" }}
+          style={{
+            background:
+              "linear-gradient(120deg, #f8fafc, #e0f2fe, #e0e7ff, #f8fafc)",
+            backgroundSize: "300% 300%",
+          }}
+        />
 
-        {/* ===== GRID KANDIDAT ===== */}
-        {loading ? (
-          <p className="text-center">Memuat kandidat...</p>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-8 sm:gap-10">
-            {candidates.map((c) => {
-              const active = selected?.id === c.id
-              return (
-                <motion.div
-                  key={c.id}
-                  whileHover={{ y: -6, scale: 1.03 }}
-                  whileTap={{ scale: 0.97 }}
-                  onClick={() => setSelected(c)}
-                  className={`rounded-3xl px-6 sm:px-7 pt-9 pb-8 cursor-pointer transition
-                  ${active
-                    ? "border-cyan-400 shadow-[0_0_30px_rgba(34,211,238,0.6)]"
-                    : "border-slate-700"
-                  }
-                  bg-slate-900 text-white border`}
-                >
-                  <img
-                    src={c.photo ? `${BASE_URL}${c.photo}` : "/candidate-default.png"}
-                    className="w-20 h-20 sm:w-24 sm:h-24 mx-auto rounded-full border-4 border-slate-700 object-cover"
-                    alt={c.name}
-                  />
+        <div className="pt-24 pb-28 max-w-6xl mx-auto px-4 sm:px-6">
 
-                  <h3 className="mt-5 text-base sm:text-lg font-bold text-center">
-                    {c.name}
-                  </h3>
-                  <p className="text-xs text-center text-slate-400">
-                    Wakil: {c.vice}
-                  </p>
-
-                  <div className="flex justify-center gap-3 mt-6">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setPreview(c)
-                      }}
-                      className="px-4 py-1.5 text-xs sm:text-sm rounded-full bg-slate-700 hover:bg-slate-600 transition"
-                    >
-                      👁 Lihat
-                    </button>
-
-                    <span
-                      className={`px-4 sm:px-5 py-1.5 text-xs sm:text-sm rounded-full font-semibold
-                      ${active
-                        ? "bg-cyan-400 text-slate-900"
-                        : "bg-indigo-500 text-white"}`}
-                    >
-                      {active ? "Dipilih" : "Pilih"}
-                    </span>
-                  </div>
-                </motion.div>
-              )
-            })}
-          </div>
-        )}
-
-        {/* ===== SUBMIT ===== */}
-        <div className="mt-20 text-center">
-          <button
-            disabled={!selected || submitting}
-            onClick={submitVote}
-            className={`px-10 sm:px-14 py-4 rounded-2xl font-bold text-base sm:text-lg transition
-            ${selected
-              ? "bg-gradient-to-r from-cyan-400 to-indigo-400 text-slate-900 hover:scale-105"
-              : "bg-slate-300 text-slate-500 cursor-not-allowed"
-            }`}
+          {/* ===== HEADER ===== */}
+          <motion.div
+            initial={{ opacity: 0, y: -30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8 }}
+            className="mb-14 bg-blue-200/80 backdrop-blur-lg rounded-3xl shadow-lg border border-blue-300 p-6 sm:p-8 text-center mx-auto max-w-2xl"
           >
-            {submitting ? "Mengirim..." : "Kirim Suara"}
-          </button>
-        </div>
-      </div>
+            <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold text-blue-800">
+              Pemilihan Kandidat
+            </h1>
+            <p className="mt-2 text-base sm:text-lg text-blue-900">
+              Kenali visi, misi, dan perjalanan karir kandidat
+            </p>
+          </motion.div>
 
-      {/* ===== SUCCESS ===== */}
+          {/* ===== GRID ===== */}
+          {loading ? (
+            <div className="flex justify-center items-center py-20">
+               <p className="text-center font-bold text-blue-800 animate-pulse">Memuat kandidat...</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+              {candidates.map((c, index) => {
+                const active = selected?.id === c.id
+
+                return (
+                  <motion.div
+                    key={c.id}
+                    whileHover={!voteSuccess ? { y: -6, scale: 1.02 } : {}}
+                    onClick={() => !voteSuccess && setSelected(c)}
+                    className={`relative rounded-[32px] overflow-hidden transition cursor-pointer
+                      ${active
+                        ? "border-cyan-400 shadow-[0_0_40px_rgba(34,211,238,0.4)]"
+                        : "border-slate-800"}
+                      bg-slate-900 text-white border-2`}
+                  >
+                    {/* Label Paslon */}
+                    <div className="absolute top-4 left-4 z-10">
+                      <span className="bg-black/60 backdrop-blur-md text-cyan-400 text-[10px] font-black tracking-[0.2em] px-3 py-1.5 rounded-full border border-cyan-400/30">
+                        PASLON {c.number || index + 1}
+                      </span>
+                    </div>
+
+                    {active && voteSuccess && (
+                      <span className="absolute top-4 right-4 z-10 text-[10px] bg-green-500 text-white px-3 py-1.5 rounded-full font-black shadow-lg">
+                        ✔ TERPILIH
+                      </span>
+                    )}
+
+                    {/* Foto Kandidat */}
+                    <div className="w-full h-64 overflow-hidden bg-slate-800 relative group">
+                      <img
+                        src={c.photo ? `${BASE_URL}${c.photo}` : "/candidate-default.png"}
+                        className="w-full h-full object-cover object-top transition-transform duration-500 group-hover:scale-110"
+                        alt={c.name}
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent opacity-60" />
+                    </div>
+
+                    <div className="p-6">
+                      <div className="space-y-1 mb-6">
+                          <h3 className="text-xl font-black text-white truncate uppercase tracking-tight">{c.name}</h3>
+                          <p className="text-[10px] font-bold text-cyan-400 uppercase tracking-widest opacity-80">Calon Ketua</p>
+                      </div>
+
+                      <div className="space-y-1 mb-8">
+                          <h3 className="text-lg font-bold text-slate-200 truncate">{c.vice}</h3>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Calon Wakil Ketua</p>
+                      </div>
+
+                      <div className="flex gap-3">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setPreview(c)
+                          }}
+                          className="flex-1 py-3 text-[10px] md:text-xs font-bold rounded-2xl bg-slate-800 hover:bg-slate-700 border border-slate-700 transition-colors"
+                        >
+                          👁 Detail Visi Misi
+                        </button>
+
+                        <div
+                          className={`px-4 md:px-6 py-3 text-[10px] md:text-xs rounded-2xl font-black uppercase tracking-widest transition-all flex items-center justify-center
+                            ${active ? "bg-cyan-400 text-slate-900 shadow-[0_0_20px_rgba(34,211,238,0.5)]" : "bg-slate-800 text-slate-500 border border-slate-700"}`}
+                        >
+                          {active ? "Dipilih" : "Pilih"}
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                )
+              })}
+            </div>
+          )}
+
+          {/* ===== SUBMIT ===== */}
+          <div className="mt-20 flex justify-center">
+            <button
+              disabled={!selected || submitting || voteSuccess}
+              onClick={submitVote}
+              className={`px-10 md:px-16 py-4 md:py-5 rounded-[24px] font-black tracking-widest uppercase text-xs md:text-sm transition-all shadow-2xl
+                ${!voteSuccess && selected
+                  ? "bg-gradient-to-r from-cyan-400 to-indigo-500 text-white hover:scale-105 active:scale-95 shadow-cyan-500/20"
+                  : "bg-slate-200 text-slate-400 cursor-not-allowed shadow-none"}`}
+            >
+              {voteSuccess
+                ? "Voting Selesai"
+                : submitting
+                ? "Mengirim Suara..."
+                : "Konfirmasi Pilihan"}
+            </button>
+          </div>
+        </div>
+      </main>
+
+      {/* ===== SUCCESS NOTIFICATION ===== */}
       <AnimatePresence>
         {voteSuccess && (
           <motion.div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
+            initial={{ opacity: 0, y: 50, x: "-50%" }}
+            animate={{ opacity: 1, y: 0, x: "-50%" }}
+            exit={{ opacity: 0, y: 20, x: "-50%" }}
+            className="fixed bottom-10 left-1/2 z-[100] w-[92%] max-w-md"
           >
-            <motion.div
-              initial={{ scale: 0.6 }}
-              animate={{ scale: 1 }}
-              className="bg-white rounded-3xl px-8 py-10 text-center shadow-2xl w-full max-w-sm"
-            >
-              <div className="w-16 h-16 mx-auto mb-5 rounded-full bg-gradient-to-r from-cyan-400 to-indigo-500 flex items-center justify-center text-white text-3xl">
+            <div className="bg-white/90 backdrop-blur-2xl border border-green-200 text-green-800 px-6 py-5 rounded-[28px] shadow-[0_25px_50px_-12px_rgba(0,0,0,0.25)] flex flex-col items-center justify-center gap-2 text-center">
+              <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center text-white text-xl shadow-lg shadow-green-200 mb-1">
                 ✓
               </div>
-              <h3 className="text-lg font-bold text-slate-800 mb-2">
-                Voting Berhasil
-              </h3>
-              <p className="text-slate-600 text-sm">
-                Suara kamu telah berhasil direkam
-              </p>
-            </motion.div>
+              <h4 className="text-lg font-black tracking-tight">Voting Berhasil!</h4>
+              <p className="text-sm font-medium opacity-75">Terima kasih atas partisipasi Anda dalam pemilihan ini.</p>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -214,44 +244,42 @@ function Voting() {
       <AnimatePresence>
         {preview && (
           <motion.div
-            className="fixed inset-0 bg-black/60 z-40 flex items-center justify-center px-3"
+            className="fixed inset-0 bg-slate-900/90 backdrop-blur-sm z-[100] flex items-center justify-center p-4"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
             <motion.div
-              initial={{ y: 40, scale: 0.95 }}
-              animate={{ y: 0, scale: 1 }}
-              className="bg-white rounded-3xl p-5 sm:p-8 w-full max-w-xl max-h-[90vh] overflow-y-auto relative"
+              initial={{ y: 100, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 100, opacity: 0 }}
+              className="bg-white rounded-[32px] md:rounded-[40px] p-6 md:p-8 w-full max-w-2xl max-h-[85vh] overflow-y-auto relative shadow-2xl"
             >
               <button
                 onClick={() => setPreview(null)}
-                className="absolute top-4 right-4 text-lg text-slate-500 hover:text-slate-800"
+                className="absolute top-4 right-4 md:top-6 md:right-6 w-10 h-10 flex items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-red-50 hover:text-red-500 transition-all"
               >
                 ✕
               </button>
 
-              <img
-                src={preview.photo ? `${BASE_URL}${preview.photo}` : "/candidate-default.png"}
-                className="w-20 h-20 rounded-full mx-auto mb-4"
-                alt={preview.name}
-              />
+              <div className="mb-8">
+                <p className="text-[10px] font-black text-indigo-500 uppercase tracking-[0.3em] mb-2">Profil Lengkap</p>
+                <h3 className="text-xl md:text-3xl font-black text-slate-900 leading-tight">
+                  {preview.name} <br/> <span className="text-slate-400">&</span> {preview.vice}
+                </h3>
+              </div>
 
-              <h3 className="text-lg sm:text-xl font-bold text-center mb-8">
-                {preview.name} & {preview.vice}
-              </h3>
-
-              <div className="space-y-10">
-                <section>
-                  <h4 className="font-semibold text-slate-900 mb-2">
-                    🧭 Perjalanan Karir
+              <div className="space-y-6 md:space-y-8">
+                <section className="bg-slate-50 p-5 md:p-6 rounded-3xl border border-slate-100">
+                  <h4 className="font-black text-xs md:text-sm uppercase tracking-wider text-slate-800 mb-4 flex items-center gap-2">
+                    <span className="w-2 h-6 bg-indigo-500 rounded-full"></span> 🧭 Perjalanan Karir
                   </h4>
                   {renderParagraph(preview.career)}
                 </section>
 
-                <section>
-                  <h4 className="font-semibold text-slate-900 mb-2">
-                    🎯 Visi & Misi
+                <section className="bg-slate-50 p-5 md:p-6 rounded-3xl border border-slate-100">
+                  <h4 className="font-black text-xs md:text-sm uppercase tracking-wider text-slate-800 mb-4 flex items-center gap-2">
+                    <span className="w-2 h-6 bg-cyan-400 rounded-full"></span> 🎯 Visi & Misi
                   </h4>
                   {renderParagraph(preview.description)}
                 </section>
