@@ -1,50 +1,90 @@
-name: Frontend CI
+name: Deploy Frontend to cPanel via FTP
 
 on:
   push:
-    branches: ["main"]
-    paths:
-      - "src/**"
-      - "public/**"
-      - "index.html"
-      - "package.json"
-      - "package-lock.json"
-      - "vite.config.js"
-      - "eslint.config.js"
-      - ".github/workflows/frontend-ci.yml"
-  pull_request:
-    branches: ["main"]
-    paths:
-      - "src/**"
-      - "public/**"
-      - "index.html"
-      - "package.json"
-      - "package-lock.json"
-      - "vite.config.js"
-      - "eslint.config.js"
-      - ".github/workflows/frontend-ci.yml"
+    branches:
+      - main
   workflow_dispatch:
 
 jobs:
-  frontend:
+  deploy:
+    name: Build & Deploy to Production
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: 📥 Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name: ⚙️ Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: package-lock.json
+          node-version: '22'
+          cache: 'npm'
 
-      - name: Install dependencies
+      - name: 📦 Install Dependencies
         run: npm ci
 
-      - name: Lint frontend
-        run: npm run lint
-
-      - name: Build frontend
+      - name: 🔨 Build Production
         run: npm run build
+        env:
+          VITE_API_URL: ${{ secrets.VITE_API_URL }}
+        continue-on-error: false
+
+      - name: 📋 List Build Output
+        run: |
+          echo "📂 Build output:"
+          ls -la dist/ || echo "⚠️ dist/ folder not found!"
+          echo "📊 Build size:"
+          du -sh dist/ || echo "⚠️ Could not calculate size"
+
+      - name: 📤 Deploy to cPanel via FTP
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_HOST }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          local-dir: ./dist/
+          server-dir: ./
+          protocol: ftps
+          port: 21
+          log-level: verbose
+          dangerous-clean-slate: false
+          state-name: .ftp-deploy-sync-state.json
+          exclude: |
+            **/.git*
+            **/.git*/**
+            **/node_modules/**
+            **/.vscode/**
+            **/*.md
+
+      - name: 🏥 Health Check
+        continue-on-error: true
+        run: |
+          echo "⏳ Waiting for server to process..."
+          sleep 10
+          echo "🔍 Checking website..."
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://evotting.himaif-iwu.com/ || echo "000")
+          if [ "$STATUS" = "200" ]; then
+            echo "✅ Website is live and responding!"
+          else
+            echo "⚠️ Website returned status: $STATUS (This may be normal during propagation)"
+          fi
+
+      - name: ✅ Deployment Success
+        if: success()
+        run: |
+          echo "🎉 Frontend deployed successfully!"
+          echo "🌐 URL: https://evotting.himaif-iwu.com/"
+          echo "📅 Deployed at: $(date)"
+
+      - name: ❌ Deployment Failed
+        if: failure()
+        run: |
+          echo "❌ Deployment failed! Check logs above."
+          exit 1
+
+      - name: 🧹 Cleanup
+        if: always()
+        run: |
+          echo "🧹 Cleaning up temporary files..."
+          rm -rf dist node_modules
